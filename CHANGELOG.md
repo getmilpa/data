@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/getmilpa/data/compare/v0.1.0...v0.2.0) (2026-07-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* the roots — SQLite and MySQL behind the same six-method contract
+
+### Features
+
+* the roots — SQLite and MySQL behind the same six-method contract ([3f23e0d](https://github.com/getmilpa/data/commit/3f23e0d914ed4795e918a20732d3747dd7722310))
+
 ## 0.1.0 (2026-07-09)
 
 
