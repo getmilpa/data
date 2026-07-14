@@ -4,7 +4,7 @@
  * This file is part of milpa/data — the runtime-native persistence primitive of the Milpa PHP
  * framework.
  *
- * (c) TeamX Agency — https://teamx.agency <hola@teamx.agency>
+ * (c) Rodrigo Vicente - TeamX Agency — https://teamx.agency <hola@teamx.agency>
  *
  * @license Apache-2.0
  *

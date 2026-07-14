@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * This file is part of Milpa Data — the runtime-native persistence primitive of the Milpa PHP framework.
+ *
+ * (c) Rodrigo Vicente - TeamX Agency — https://teamx.agency <hola@teamx.agency>
+ *
+ * @license Apache-2.0
+ *
+ * @link    https://github.com/getmilpa/data
+ */
+
 declare(strict_types=1);
 
 namespace Milpa\Data;
@@ -8,8 +18,8 @@ namespace Milpa\Data;
  * A persistence boundary for one entity type: plain data in, plain data out, equality-only querying —
  * no query language, no relations, no transactions. One repository instance is bound to exactly one
  * entity class (the concrete `T`); a consumer with several persistent entity types wires one
- * repository per type. {@see FileRepository} and {@see InMemoryRepository} are the two backends
- * behind this contract.
+ * repository per type. {@see FileRepository}, {@see SqliteRepository}, {@see MysqlRepository} and
+ * {@see InMemoryRepository} are the backends behind this contract.
  *
  * @template T of EntityInterface
  */
@@ -37,7 +47,9 @@ interface RepositoryInterface
     public function delete(int|string $id): void;
 
     /**
-     * Every stored entity, in insertion order.
+     * Every stored entity, in insertion order — the order entities were first saved, regardless
+     * of their ids. The ordering is contract, not accident: the file and in-memory backends get
+     * it from PHP array insertion order; SQL backends implement it via an autoincrement key.
      *
      * @return list<T>
      */

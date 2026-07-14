@@ -61,6 +61,41 @@ abstract class RepositoryContractTestCase extends TestCase
         $this->assertSame(['A', 'B'], array_map(static fn (TestEntity $e): string => $e->name, $all));
     }
 
+    public function testAllReturnsEntitiesInInsertionOrderNotIdOrder(): void
+    {
+        $repo = $this->createRepository();
+
+        $repo->save(new TestEntity('z', 'First', 'draft'));
+        $repo->save(new TestEntity('a', 'Second', 'draft'));
+        $repo->save(new TestEntity(null, 'Third', 'draft'));
+
+        $this->assertSame(
+            ['First', 'Second', 'Third'],
+            array_map(static fn (TestEntity $e): string => $e->name, $repo->all()),
+            'all() must return entities in insertion order — the order they were first saved — not id order',
+        );
+    }
+
+    public function testResavingAnExistingIdUpdatesInPlaceWithoutMovingItsPosition(): void
+    {
+        $repo = $this->createRepository();
+
+        $repo->save(new TestEntity('a', 'First', 'draft'));
+        $repo->save(new TestEntity('b', 'Second', 'draft'));
+        $repo->save(new TestEntity('c', 'Third', 'draft'));
+
+        $repo->save(new TestEntity('a', 'First, revised', 'published'));
+
+        $all = $repo->all();
+        $this->assertCount(3, $all, 're-saving an existing id must update the stored entity, not append a new one');
+        $this->assertSame(
+            ['First, revised', 'Second', 'Third'],
+            array_map(static fn (TestEntity $e): string => $e->name, $all),
+            'a re-saved entity keeps the position of its first save in all()',
+        );
+        $this->assertSame('published', $repo->find('a')?->status);
+    }
+
     public function testAllIsEmptyForAnEmptyRepository(): void
     {
         $repo = $this->createRepository();

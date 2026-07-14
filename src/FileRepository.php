@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * This file is part of Milpa Data — the runtime-native persistence primitive of the Milpa PHP framework.
+ *
+ * (c) Rodrigo Vicente - TeamX Agency — https://teamx.agency <hola@teamx.agency>
+ *
+ * @license Apache-2.0
+ *
+ * @link    https://github.com/getmilpa/data
+ */
+
 declare(strict_types=1);
 
 namespace Milpa\Data;
@@ -13,6 +23,10 @@ namespace Milpa\Data;
  * A fresh `FileRepository` pointed at the same path — a different process, a different request —
  * reads back exactly what the last write left, because every read and write goes through the file
  * itself rather than an in-memory cache.
+ *
+ * Every mutation runs under an exclusive `flock` held across the whole read-modify-write cycle,
+ * and every read takes a shared lock — so concurrent processes over the same file can neither
+ * observe a torn write nor lose each other's rows.
  *
  * @template T of EntityInterface
  *
@@ -43,7 +57,9 @@ final class FileRepository implements RepositoryInterface
     }
 
     /**
-     * Persists `$entity` to the file. When `$entity->id()` is `null`, a fresh id is assigned via
+     * Persists `$entity` to the file, under one exclusive lock held across the whole
+     * read-modify-write cycle — so a concurrent writer to the same file can neither steal the
+     * assigned id nor be overwritten. When `$entity->id()` is `null`, a fresh id is assigned via
      * {@see self::nextId()}. The written row always carries the id actually used under the key
      * `'id'`, regardless of what `$entity->toArray()` returned for it.
      *
@@ -51,30 +67,34 @@ final class FileRepository implements RepositoryInterface
      */
     public function save(EntityInterface $entity): int|string
     {
-        $rows = $this->load();
-        $id = $entity->id() ?? $this->nextIdFrom($rows);
+        /** @var int|string */
+        return $this->mutate(function (array $rows) use ($entity): array {
+            $id = $entity->id() ?? $this->nextIdFrom($rows);
 
-        $row = $entity->toArray();
-        $row['id'] = $id;
-        $rows[$id] = $row;
+            $row = $entity->toArray();
+            $row['id'] = $id;
+            $rows[$id] = $row;
 
-        $this->write($rows);
-
-        return $id;
+            return [$rows, $id];
+        });
     }
 
     /**
-     * Removes the entity stored under `$id`. A no-op when no entity is stored under it.
+     * Removes the entity stored under `$id`, under the same exclusive read-modify-write lock as
+     * {@see self::save()}. A no-op when no entity is stored under it.
      */
     public function delete(int|string $id): void
     {
-        $rows = $this->load();
-        unset($rows[$id]);
-        $this->write($rows);
+        $this->mutate(static function (array $rows) use ($id): array {
+            unset($rows[$id]);
+
+            return [$rows, null];
+        });
     }
 
     /**
-     * Every stored entity, in file order.
+     * Every stored entity, in insertion order — rows live in the file in the order they were
+     * first saved, regardless of their ids.
      *
      * @return list<T>
      */
@@ -147,6 +167,8 @@ final class FileRepository implements RepositoryInterface
     }
 
     /**
+     * Reads the current rows under a shared lock, so a writer mid-write can never be observed.
+     *
      * @return array<int|string, array<string,mixed>>
      */
     private function load(): array
@@ -155,24 +177,75 @@ final class FileRepository implements RepositoryInterface
             return [];
         }
 
-        $data = json_decode((string) file_get_contents($this->file), true);
+        $handle = fopen($this->file, 'r');
+        if ($handle === false) {
+            throw new \RuntimeException("Unable to open data file: {$this->file}");
+        }
 
-        return is_array($data) ? $data : [];
+        try {
+            if (!flock($handle, LOCK_SH)) {
+                throw new \RuntimeException("Unable to lock data file: {$this->file}");
+            }
+
+            return $this->decode((string) stream_get_contents($handle));
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     /**
-     * @param array<int|string, array<string,mixed>> $rows
+     * Runs `$mutation` over the freshly-read rows and persists the rows it returns, all under one
+     * exclusive lock held for the whole read-modify-write cycle — the lock is what turns two
+     * concurrent mutations into two sequential ones instead of a lost update.
+     *
+     * @template R
+     *
+     * @param callable(array<int|string, array<string,mixed>>): array{array<int|string, array<string,mixed>>, R} $mutation rows in, `[rows to persist, result]` out
+     *
+     * @return R the second element of the pair `$mutation` returned
      */
-    private function write(array $rows): void
+    private function mutate(callable $mutation): mixed
     {
         $dir = \dirname($this->file);
         if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
             throw new \RuntimeException("Unable to create data directory: {$dir}");
         }
 
-        file_put_contents(
-            $this->file,
-            json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-        );
+        $handle = fopen($this->file, 'c+');
+        if ($handle === false) {
+            throw new \RuntimeException("Unable to open data file: {$this->file}");
+        }
+
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                throw new \RuntimeException("Unable to lock data file: {$this->file}");
+            }
+
+            [$rows, $result] = $mutation($this->decode((string) stream_get_contents($handle)));
+
+            // Encode BEFORE truncating: if encoding throws, the file stays byte-untouched.
+            $json = json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+            ftruncate($handle, 0);
+            rewind($handle);
+            fwrite($handle, $json);
+            fflush($handle);
+
+            return $result;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+
+    /**
+     * @return array<int|string, array<string,mixed>>
+     */
+    private function decode(string $json): array
+    {
+        $data = json_decode($json, true);
+
+        return is_array($data) ? $data : [];
     }
 }
