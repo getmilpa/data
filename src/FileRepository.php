@@ -208,7 +208,10 @@ final class FileRepository implements RepositoryInterface
     private function mutate(callable $mutation): mixed
     {
         $dir = \dirname($this->file);
-        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        // The failure is handled right below, with a message naming the
+        // directory and what to do about it; PHP's own warning adds nothing
+        // and reaches a log the caller may never read.
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
             throw new \RuntimeException("Unable to create data directory: {$dir}");
         }
 

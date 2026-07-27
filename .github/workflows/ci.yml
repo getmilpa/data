@@ -17,6 +17,22 @@ jobs:
       matrix:
         php: ['8.3', '8.4']
     continue-on-error: ${{ matrix.php == '8.4' }}
+    # MysqlRepository's tests are integration tests: without a server they skip,
+    # and 22 of the suite's 93 tests were skipping on every run — the repository
+    # this package exists to publish was never exercised in CI.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: milpa_data_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@v4
 
@@ -24,7 +40,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          coverage: none
+          coverage: xdebug
 
       - name: Validate composer.json
         run: composer validate --strict
@@ -46,8 +62,15 @@ jobs:
       - name: PHPStan
         run: vendor/bin/phpstan analyse src --no-progress
 
-      - name: PHPUnit
-        run: vendor/bin/phpunit --testsuite Data
+      - name: PHPUnit + coverage floor
+        env:
+          XDEBUG_MODE: coverage
+          MILPA_DATA_MYSQL_DSN: 'mysql:host=127.0.0.1;port=3306;dbname=milpa_data_test'
+          MILPA_DATA_MYSQL_USER: root
+          MILPA_DATA_MYSQL_PASSWORD: root
+        run: |
+          vendor/bin/phpunit --testsuite Data --coverage-clover=build/clover.xml
+          php tools/coverage-floor.php build/clover.xml 92
 
       - name: DocBlock coverage gate
         run: php tools/validate-docblocks.php

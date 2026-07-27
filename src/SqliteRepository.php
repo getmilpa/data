@@ -312,7 +312,10 @@ final class SqliteRepository implements RepositoryInterface
         }
 
         $dir = \dirname($this->dbPath);
-        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        // The failure is handled right below, with a message naming the
+        // directory and what to do about it; PHP's own warning adds nothing
+        // and reaches a log the caller may never read.
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
             throw new \RuntimeException(
                 "Unable to create database directory: {$dir}" . PHP_EOL
                 . 'Why it matters: SQLite keeps the whole database in one file, and that file cannot exist until its directory does.' . PHP_EOL

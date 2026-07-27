@@ -248,4 +248,20 @@ final class MysqlRepositoryTest extends RepositoryContractTestCase
             [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION],
         );
     }
+
+    public function testARowThatIsNotAJsonObjectIsReportedWithTheTable(): void
+    {
+        // A partial write or a hand-edited row: the reader has to learn which
+        // table it came from, not just that "something" was corrupt.
+        $repository = $this->repository(TestEntity::class);
+        $repository->save(new TestEntity(1, 'uno', 'activo'));
+
+        $tabla = $this->tableNames()[0];
+        $this->pdo()->exec("UPDATE `{$tabla}` SET doc = '\"no soy un objeto\"'");
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Corrupt document in MySQL table');
+
+        $repository->find(1);
+    }
 }

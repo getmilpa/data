@@ -138,4 +138,62 @@ final class SqliteRepositoryTest extends RepositoryContractTestCase
         /** @var list<string> */
         return $statement->fetchAll(\PDO::FETCH_COLUMN);
     }
+
+    // ---- what a broken file or a corrupt row does ------------------------------
+
+    public function testARowThatIsNotAJsonObjectIsReportedWithTheTableAndThePath(): void
+    {
+        // Someone else's process, a partial write, a hand-edited row: the
+        // repository has to say which table and which file, or the reader is
+        // left guessing across every database on the machine.
+        $repository = new SqliteRepository($this->path, TestEntity::class);
+        $repository->save(new TestEntity(1, 'uno', 'activo'));
+
+        $pdo = new \PDO('sqlite:' . $this->path);
+        $pdo->exec("UPDATE " . $this->tableNames()[0] . " SET doc = '\"no soy un objeto\"'");
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Corrupt document in SQLite table');
+
+        $repository->find(1);
+    }
+
+    public function testADatabaseDirectoryThatCannotBeCreatedIsNamed(): void
+    {
+        // The parent of the requested directory is a FILE, so no mkdir can
+        // succeed. Naming the directory is what turns this into a fixable
+        // message instead of a permissions mystery.
+        $archivo = sys_get_temp_dir() . '/milpa-data-no-es-dir-' . uniqid('', true);
+        file_put_contents($archivo, 'soy un archivo, no un directorio');
+
+        try {
+            $repository = new SqliteRepository($archivo . '/sub/base.db', TestEntity::class);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Unable to create database directory');
+
+            $repository->find(1);
+        } finally {
+            @unlink($archivo);
+        }
+    }
+
+    public function testADatabaseFileThatCannotBeOpenedCarriesTheDriversReason(): void
+    {
+        // The path is a directory: SQLite cannot open it, and the message has
+        // to carry the driver's own words or there is nothing to act on.
+        $dir = sys_get_temp_dir() . '/milpa-data-dir-' . uniqid('', true);
+        mkdir($dir, 0o775, true);
+
+        try {
+            $repository = new SqliteRepository($dir, TestEntity::class);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Unable to open SQLite database');
+
+            $repository->find(1);
+        } finally {
+            @rmdir($dir);
+        }
+    }
 }
