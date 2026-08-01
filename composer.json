@@ -48,14 +48,14 @@
     "milpa": {
       "capability": {
         "id": "persistence",
-        "title": "Persistencia con cuatro backends: archivo, PDO, Doctrine o memoria",
+        "title": "Persistence with four backends: file, PDO, Doctrine or memory",
         "unlocks": [
           "el backend de tokens y entidades que elige config/app.php"
         ],
         "provides": [
           "data.repository"
         ],
-        "briefing": "Esta app persiste: hay repositorios y el backend se elige en config/app.php."
+        "briefing": "This app persists: there are repositories, and the backend is chosen in config/app.php."
       }
     }
   }
