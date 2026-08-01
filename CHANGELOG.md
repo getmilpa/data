@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/getmilpa/data/compare/v0.2.0...v0.2.1) (2026-08-01)
+
+
+### Bug Fixes
+
+* este paquete declara que aporta ([e58e032](https://github.com/getmilpa/data/commit/e58e0324727093282a1ac3a2822bdd69113ff26b))
+
 ## [0.2.0](https://github.com/getmilpa/data/compare/v0.1.0...v0.2.0) (2026-07-14)
 
 
