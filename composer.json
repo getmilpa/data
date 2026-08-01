@@ -1,6 +1,16 @@
 {
   "name": "milpa/data",
   "description": "Runtime-native persistence primitive for the Milpa PHP framework: a plain-entity + repository contract, with file-JSON, SQLite and MySQL document-store, and in-memory backends behind a common RepositoryInterface \u2014 zero ORM, zero migrations.",
+  "keywords": [
+    "php",
+    "milpa",
+    "framework",
+    "persistence",
+    "repository",
+    "doctrine",
+    "orm",
+    "database"
+  ],
   "type": "library",
   "license": "Apache-2.0",
   "authors": [
@@ -32,6 +42,21 @@
     "psr-4": {
       "Milpa\\Data\\Tests\\": "tests/",
       "Milpa\\Docs\\": "vendor/milpa/core/tools/gen-docs/"
+    }
+  },
+  "extra": {
+    "milpa": {
+      "capability": {
+        "id": "persistence",
+        "title": "Persistencia con cuatro backends: archivo, PDO, Doctrine o memoria",
+        "unlocks": [
+          "el backend de tokens y entidades que elige config/app.php"
+        ],
+        "provides": [
+          "data.repository"
+        ],
+        "briefing": "Esta app persiste: hay repositorios y el backend se elige en config/app.php."
+      }
     }
   }
 }
