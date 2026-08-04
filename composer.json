@@ -55,7 +55,10 @@
         "provides": [
           "data.repository"
         ],
-        "briefing": "This app persists: there are repositories, and the backend is chosen in config/app.php."
+        "briefing": "This app persists: there are repositories, and the backend is chosen in config/app.php.",
+        "contracts": {
+          "data.repository": "Milpa\\Data\\FileRepository"
+        }
       }
     }
   }
