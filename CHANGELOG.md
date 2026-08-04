@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/getmilpa/data/compare/v0.2.3...v0.2.4) (2026-08-04)
+
+
+### Bug Fixes
+
+* **capability:** declara el contrato de cada id que provee ([cd50a34](https://github.com/getmilpa/data/commit/cd50a3488f4ef13d122f38039e43c941737c3f8c))
+
 ## [0.2.3](https://github.com/getmilpa/data/compare/v0.2.2...v0.2.3) (2026-08-04)
 
 
