@@ -31,8 +31,9 @@ namespace Milpa\Data;
  * @template T of EntityInterface
  *
  * @implements RepositoryInterface<T>
+ * @implements PagesResults<T>
  */
-final class FileRepository implements RepositoryInterface
+final class FileRepository implements RepositoryInterface, PagesResults
 {
     /**
      * @param string          $file        path to the JSON collection file; its directory is created on first save if missing
@@ -127,6 +128,46 @@ final class FileRepository implements RepositoryInterface
         );
 
         return array_values(array_map($this->hydrate(...), $matches));
+    }
+
+    /**
+     * At most `$limit` matching entities, skipping the first `$offset`.
+     *
+     * A JSON file is read whole or not at all, so the bounds are applied after loading — the win here is
+     * that only the page is DECODED into entities, not that fewer bytes leave the disk. Said plainly
+     * because a page that is cheap on SQLite and merely correct here is the honest state of this backend.
+     *
+     * @param array<string,mixed> $criteria
+     *
+     * @return list<T>
+     */
+    public function page(array $criteria, int $limit, int $offset = 0): array
+    {
+        self::assertBounds($limit, $offset);
+
+        $matches = array_values(array_filter(
+            $this->load(),
+            fn (array $row): bool => $this->matches($row, $criteria),
+        ));
+
+        return array_map($this->hydrate(...), \array_slice($matches, $offset, $limit));
+    }
+
+    /**
+     * Refuses a bound that has no meaning, where it is written.
+     *
+     * A negative limit or offset is a caller's bug — clamping it to zero would answer an empty page and
+     * let the bug travel.
+     */
+    private static function assertBounds(int $limit, int $offset): void
+    {
+        if ($limit < 0) {
+            throw new \InvalidArgumentException('A page limit cannot be negative, got ' . $limit . '.');
+        }
+
+        if ($offset < 0) {
+            throw new \InvalidArgumentException('A page offset cannot be negative, got ' . $offset . '.');
+        }
     }
 
     /**

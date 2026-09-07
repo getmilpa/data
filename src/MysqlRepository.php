@@ -47,8 +47,9 @@ namespace Milpa\Data;
  * @template T of EntityInterface
  *
  * @implements RepositoryInterface<T>
+ * @implements PagesResults<T>
  */
-final class MysqlRepository implements RepositoryInterface
+final class MysqlRepository implements RepositoryInterface, PagesResults
 {
     private ?\PDO $pdo = null;
 
@@ -189,6 +190,77 @@ final class MysqlRepository implements RepositoryInterface
         );
 
         return array_values(array_map($this->hydrate(...), $matches));
+    }
+
+    /**
+     * At most `$limit` matching entities, skipping the first `$offset`.
+     *
+     * With no criteria the bounds go INTO the query, so the rows past the page never leave the engine.
+     * With criteria they cannot: matching is strict equality over the decoded document and SQL compares
+     * more loosely, so a `LIMIT` applied before a PHP filter that then drops rows would answer a short or
+     * wrong page. Correctness first — the filtered path fetches and then slices, and pushing the criteria
+     * down with identical semantics is the next slice, named rather than half-built (greenhouse
+     * decisions/0215).
+     *
+     * @param array<string,mixed> $criteria
+     *
+     * @return list<T>
+     */
+    public function page(array $criteria, int $limit, int $offset = 0): array
+    {
+        self::assertBounds($limit, $offset);
+
+        if ($criteria === []) {
+            return array_map(
+                fn (string $doc): EntityInterface => $this->hydrate($this->decode($doc)),
+                $this->boundedDocs($limit, $offset),
+            );
+        }
+
+        $matches = array_values(array_filter(
+            array_map($this->decode(...), $this->docs()),
+            fn (array $row): bool => $this->matches($row, $criteria),
+        ));
+
+        return array_map($this->hydrate(...), \array_slice($matches, $offset, $limit));
+    }
+
+    /**
+     * The stored documents for one page, bounded BY THE ENGINE.
+     *
+     * @return list<string>
+     */
+    private function boundedDocs(int $limit, int $offset): array
+    {
+        if ($limit === 0) {
+            return [];
+        }
+
+        // The bounds are interpolated, not bound. They are integers this method already refused unless
+        // they were non-negative, so there is no string to inject — and a PLACEHOLDER would be worse
+        // here: a driver that does not emulate prepares binds them as strings, and `LIMIT '20'` is a
+        // syntax error.
+        /** @var list<string> */
+        return $this->run(
+            "SELECT doc FROM `{$this->table}` ORDER BY seq LIMIT {$limit} OFFSET {$offset}",
+        )->fetchAll(\PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Refuses a bound that has no meaning, where it is written.
+     *
+     * A negative limit or offset is a caller's bug — clamping it to zero would answer an empty page and
+     * let the bug travel.
+     */
+    private static function assertBounds(int $limit, int $offset): void
+    {
+        if ($limit < 0) {
+            throw new \InvalidArgumentException('A page limit cannot be negative, got ' . $limit . '.');
+        }
+
+        if ($offset < 0) {
+            throw new \InvalidArgumentException('A page offset cannot be negative, got ' . $offset . '.');
+        }
     }
 
     /**
