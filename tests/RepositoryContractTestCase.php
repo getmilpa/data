@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Milpa\Data\Tests;
 
+use Milpa\Data\PagesResults;
 use Milpa\Data\RepositoryInterface;
 use Milpa\Data\Tests\Fixtures\TestEntity;
 use PHPUnit\Framework\TestCase;
@@ -189,5 +190,76 @@ abstract class RepositoryContractTestCase extends TestCase
         $this->assertSame('draft', $foundA->status);
         $this->assertSame('B', $foundB->name);
         $this->assertSame('published', $foundB->status);
+    }
+
+    public function testAPageIsBoundedAndKeepsInsertionOrder(): void
+    {
+        $repo = $this->createRepository();
+        foreach (['A', 'B', 'C', 'D', 'E'] as $name) {
+            $repo->save(new TestEntity(null, $name, 'draft'));
+        }
+
+        $this->assertInstanceOf(PagesResults::class, $repo, 'every backend in this package pages');
+        $this->assertSame(['A', 'B'], $this->names($repo->page([], 2)));
+        $this->assertSame(['C', 'D'], $this->names($repo->page([], 2, 2)));
+        $this->assertSame(['E'], $this->names($repo->page([], 2, 4)), 'a short last page is a page');
+        $this->assertSame([], $this->names($repo->page([], 2, 99)), 'past the end is empty, not an error');
+    }
+
+    public function testAPageOfAFilteredCollectionFiltersFirstAndBoundsAfter(): void
+    {
+        // The order matters and is the reason the SQL backends do NOT push a LIMIT here: bounding before
+        // filtering would answer a short page, or the wrong rows entirely.
+        $repo = $this->createRepository();
+        foreach ([['A', 'draft'], ['B', 'published'], ['C', 'draft'], ['D', 'published'], ['E', 'published']] as $row) {
+            $repo->save(new TestEntity(null, $row[0], $row[1]));
+        }
+
+        $this->assertSame(['B', 'D'], $this->names($repo->page(['status' => 'published'], 2)));
+        $this->assertSame(['E'], $this->names($repo->page(['status' => 'published'], 2, 2)));
+        $this->assertSame([], $this->names($repo->page(['status' => 'archived'], 10)));
+    }
+
+    public function testAZeroLimitAnswersAnEmptyPageAndTouchesNothing(): void
+    {
+        $repo = $this->createRepository();
+        $repo->save(new TestEntity(null, 'A', 'draft'));
+
+        $this->assertSame([], $repo->page([], 0));
+        $this->assertSame([], $repo->page(['status' => 'draft'], 0));
+    }
+
+    public function testANegativeBoundIsRefusedRatherThanClamped(): void
+    {
+        $repo = $this->createRepository();
+
+        foreach ([[-1, 0], [0, -1]] as $bounds) {
+            try {
+                $repo->page([], $bounds[0], $bounds[1]);
+                $this->fail('a negative bound must be refused, not clamped to an empty page');
+            } catch (\InvalidArgumentException $refused) {
+                $this->assertMatchesRegularExpression('/cannot be negative/', $refused->getMessage());
+            }
+        }
+    }
+
+    public function testAPageOfEverythingIsTheSameAsAll(): void
+    {
+        $repo = $this->createRepository();
+        foreach (['A', 'B', 'C'] as $name) {
+            $repo->save(new TestEntity(null, $name, 'draft'));
+        }
+
+        $this->assertSame($this->names($repo->all()), $this->names($repo->page([], 100)));
+    }
+
+    /**
+     * @param list<TestEntity> $entities
+     *
+     * @return list<string>
+     */
+    private function names(array $entities): array
+    {
+        return array_map(static fn (TestEntity $e): string => $e->name, $entities);
     }
 }

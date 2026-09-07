@@ -23,7 +23,7 @@ namespace Milpa\Data;
  *
  * @implements RepositoryInterface<T>
  */
-final class InMemoryRepository implements RepositoryInterface
+final class InMemoryRepository implements RepositoryInterface, PagesResults
 {
     /** @var array<int|string, array<string,mixed>> */
     private array $rows = [];
@@ -107,6 +107,46 @@ final class InMemoryRepository implements RepositoryInterface
         );
 
         return array_values(array_map($this->hydrate(...), $matches));
+    }
+
+    /**
+     * At most `$limit` matching entities, skipping the first `$offset`.
+     *
+     * Nothing is pushed anywhere: this backend already holds every row in memory, so the page is a slice
+     * of what is here. It implements the contract so a consumer can page any repository without asking
+     * which backend it got.
+     *
+     * @param array<string,mixed> $criteria
+     *
+     * @return list<T>
+     */
+    public function page(array $criteria, int $limit, int $offset = 0): array
+    {
+        self::assertBounds($limit, $offset);
+
+        $matches = array_values(array_filter(
+            $this->rows,
+            fn (array $row): bool => $this->matches($row, $criteria),
+        ));
+
+        return array_values(array_map($this->hydrate(...), \array_slice($matches, $offset, $limit)));
+    }
+
+    /**
+     * Refuses a bound that has no meaning, where it is written.
+     *
+     * A negative limit or offset is a caller's bug — clamping it to zero would answer an empty page and
+     * let the bug travel.
+     */
+    private static function assertBounds(int $limit, int $offset): void
+    {
+        if ($limit < 0) {
+            throw new \InvalidArgumentException('A page limit cannot be negative, got ' . $limit . '.');
+        }
+
+        if ($offset < 0) {
+            throw new \InvalidArgumentException('A page offset cannot be negative, got ' . $offset . '.');
+        }
     }
 
     /**

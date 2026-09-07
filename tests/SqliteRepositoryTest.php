@@ -196,4 +196,102 @@ final class SqliteRepositoryTest extends RepositoryContractTestCase
             @rmdir($dir);
         }
     }
+
+    /**
+     * The page never DECODES past its bounds, proved by making a row beyond it unreadable.
+     *
+     * Binary, not a threshold: row 5 000's document is replaced with text that is not JSON, and
+     * `decode()` throws on anything that reaches it. The page answers; `all()`, which decodes everything,
+     * blows up on the very same store.
+     *
+     * What it does NOT prove is that the rows never left the engine — a backend that fetched all ten
+     * thousand strings and sliced twenty in PHP passes this too. That was measured, not assumed: mutating
+     * the backend to do exactly that left this test green. The fetch bound is
+     * {@see self::testAPageDoesNotCarryTheRowsBeyondItIntoMemory()}, and the two together are the claim.
+     */
+    public function testAPageNeverDecodesBeyondItsBounds(): void
+    {
+        $repo = new SqliteRepository($this->path, TestEntity::class);
+        for ($i = 1; $i <= 10000; ++$i) {
+            $repo->save(new TestEntity($i, 'row-' . $i, 'draft'));
+        }
+
+        $pdo = new \PDO('sqlite:' . $this->path);
+        $table = (string) $pdo->query("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")->fetchColumn();
+        $poisoned = $pdo->prepare("UPDATE \"{$table}\" SET doc = :doc WHERE id = :id");
+        $poisoned->execute([':doc' => 'this is not json', ':id' => '5000']);
+
+        $page = $repo->page([], 20);
+
+        self::assertCount(20, $page);
+        self::assertSame('row-1', $page[0]->name);
+        self::assertSame('row-20', $page[19]->name);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/Corrupt document/');
+        $repo->all();
+    }
+
+    /** The same proof for an OFFSET: a page that starts after the poison still steps over it. */
+    public function testAnOffsetPageAlsoStopsAtItsBounds(): void
+    {
+        $repo = new SqliteRepository($this->path, TestEntity::class);
+        for ($i = 1; $i <= 200; ++$i) {
+            $repo->save(new TestEntity($i, 'row-' . $i, 'draft'));
+        }
+
+        $pdo = new \PDO('sqlite:' . $this->path);
+        $table = (string) $pdo->query("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")->fetchColumn();
+        $pdo->prepare("UPDATE \"{$table}\" SET doc = :doc WHERE id = :id")
+            ->execute([':doc' => 'not json either', ':id' => '150']);
+
+        $page = $repo->page([], 5, 100);
+
+        self::assertSame('row-101', $page[0]->name);
+        self::assertCount(5, $page);
+    }
+
+    /**
+     * The rows past the page never come back from the engine — measured in BYTES, because that is what
+     * fetching them costs.
+     *
+     * Ten thousand documents of about 2 KB each: fetching them all is tens of megabytes of PHP strings
+     * before a single entity exists. If `LIMIT` reaches SQLite, a twenty-row page costs a rounding error
+     * of that. The assertion is an order of magnitude, not a tight number, so it measures the DIFFERENCE
+     * in kind and not the allocator's mood.
+     *
+     * This is the test that fails when the pushdown is removed — verified by removing it.
+     */
+    public function testAPageDoesNotCarryTheRowsBeyondItIntoMemory(): void
+    {
+        $repo = new SqliteRepository($this->path, TestEntity::class);
+        $padding = str_repeat('x', 2048);
+        for ($i = 1; $i <= 10000; ++$i) {
+            $repo->save(new TestEntity($i, 'row-' . $i . '-' . $padding, 'draft'));
+        }
+
+        // PEAK, reset per measurement — not current usage. A backend that fetched everything and sliced
+        // in PHP frees the intermediate array before returning, so `memory_get_usage()` afterwards looks
+        // identical to a real pushdown. Measured: with current usage this test stayed green against a
+        // deliberately unbounded backend, which made it decoration. The peak is what fetching costs.
+        gc_collect_cycles();
+        memory_reset_peak_usage();
+        $page = $repo->page([], 20);
+        $pageCost = memory_get_peak_usage() - memory_get_usage();
+        self::assertCount(20, $page);
+        unset($page);
+
+        gc_collect_cycles();
+        memory_reset_peak_usage();
+        $everything = $repo->all();
+        $allCost = memory_get_peak_usage() - memory_get_usage();
+        self::assertCount(10000, $everything);
+        unset($everything);
+
+        self::assertGreaterThan(
+            $pageCost * 10,
+            $allCost,
+            sprintf('a 20-row page cost %d bytes and the whole table cost %d — the LIMIT is not reaching the engine', $pageCost, $allCost),
+        );
+    }
 }
