@@ -22,6 +22,7 @@ namespace Milpa\Data;
  * @template T of EntityInterface
  *
  * @implements RepositoryInterface<T>
+ * @implements PagesResults<T>
  */
 final class InMemoryRepository implements RepositoryInterface, PagesResults
 {
@@ -129,7 +130,7 @@ final class InMemoryRepository implements RepositoryInterface, PagesResults
             fn (array $row): bool => $this->matches($row, $criteria),
         ));
 
-        return array_values(array_map($this->hydrate(...), \array_slice($matches, $offset, $limit)));
+        return array_map($this->hydrate(...), \array_slice($matches, $offset, $limit));
     }
 
     /**

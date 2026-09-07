@@ -47,6 +47,7 @@ namespace Milpa\Data;
  * @template T of EntityInterface
  *
  * @implements RepositoryInterface<T>
+ * @implements PagesResults<T>
  */
 final class MysqlRepository implements RepositoryInterface, PagesResults
 {
@@ -221,7 +222,7 @@ final class MysqlRepository implements RepositoryInterface, PagesResults
             fn (array $row): bool => $this->matches($row, $criteria),
         ));
 
-        return array_values(array_map($this->hydrate(...), \array_slice($matches, $offset, $limit)));
+        return array_map($this->hydrate(...), \array_slice($matches, $offset, $limit));
     }
 
     /**
@@ -235,10 +236,13 @@ final class MysqlRepository implements RepositoryInterface, PagesResults
             return [];
         }
 
+        // The bounds are interpolated, not bound. They are integers this method already refused unless
+        // they were non-negative, so there is no string to inject — and a PLACEHOLDER would be worse
+        // here: a driver that does not emulate prepares binds them as strings, and `LIMIT '20'` is a
+        // syntax error.
         /** @var list<string> */
         return $this->run(
-            "SELECT doc FROM `{$this->table}` ORDER BY seq LIMIT :page_limit OFFSET :page_offset",
-            [':page_limit' => $limit, ':page_offset' => $offset],
+            "SELECT doc FROM `{$this->table}` ORDER BY seq LIMIT {$limit} OFFSET {$offset}",
         )->fetchAll(\PDO::FETCH_COLUMN);
     }
 
