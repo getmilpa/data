@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/getmilpa/data/compare/v0.2.4...v0.3.0) (2026-09-07)
+
+
+### Features
+
+* a repository can answer a bounded page ([#9](https://github.com/getmilpa/data/issues/9)) ([6ed970e](https://github.com/getmilpa/data/commit/6ed970e228545b806115b22081c0c1621b002190))
+
 ## [0.2.4](https://github.com/getmilpa/data/compare/v0.2.3...v0.2.4) (2026-08-04)
 
 
