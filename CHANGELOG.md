@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/getmilpa/data/compare/v0.3.0...v0.3.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **deps:** the dev dependency on core declares a range instead of anything ([#11](https://github.com/getmilpa/data/issues/11)) ([b157d2c](https://github.com/getmilpa/data/commit/b157d2c088f13420eb772a1caee63e30ae56a7e6))
+
 ## [0.3.0](https://github.com/getmilpa/data/compare/v0.2.4...v0.3.0) (2026-09-07)
 
 
