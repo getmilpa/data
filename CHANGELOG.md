@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/getmilpa/data/compare/v0.3.1...v0.3.2) (2026-09-10)
+
+
+### Bug Fixes
+
+* the manifest speaks the language it ships in ([#13](https://github.com/getmilpa/data/issues/13)) ([247664e](https://github.com/getmilpa/data/commit/247664ec362bc57c6f18a9731a5df073e7cb4869))
+
 ## [0.3.1](https://github.com/getmilpa/data/compare/v0.3.0...v0.3.1) (2026-09-08)
 
 
