@@ -75,7 +75,7 @@ final class RepositoryFactory
 
         return match ($driver) {
             'file' => new FileRepository(
-                self::requiredString($storage, 'path', 'file', "'path' => '/var/data/articles.json' — the JSON collection file"),
+                self::requiredString($storage, 'path', 'file', "'path' => '/var/data/<collection>.json' — the JSON collection file"),
                 $entityClass,
             ),
             'sqlite' => new SqliteRepository(
@@ -107,8 +107,9 @@ final class RepositoryFactory
 
     /**
      * The non-empty string stored under `$key`, or the teaching error naming the exact key —
-     * `storage.{$key}` — and a copy-pasteable example. An empty string is as absent as a missing
-     * key: `''` opens nothing.
+     * `storage.{$key}` — and an example of its value. The example names nothing of its own: where the
+     * value is the caller's to name it shows a placeholder, and otherwise only the app itself. An empty
+     * string is as absent as a missing key: `''` opens nothing.
      *
      * @param array<string, mixed> $storage
      */
