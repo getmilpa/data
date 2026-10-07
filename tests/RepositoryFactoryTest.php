@@ -184,7 +184,7 @@ final class RepositoryFactoryTest extends TestCase
             $message = $e->getMessage();
             $this->assertStringContainsString('storage.path', $message, 'the error must name the exact missing key');
             $this->assertStringContainsString("'file'", $message, 'the error must name the driver that needs the key');
-            $this->assertStringContainsString('/var/data/articles.json', $message, 'the error must carry a copy-pasteable example');
+            $this->assertStringContainsString("'path' => '/var/data/<collection>.json'", $message, 'the error must show what the value looks like');
         }
     }
 
@@ -213,6 +213,32 @@ final class RepositoryFactoryTest extends TestCase
             $this->assertStringContainsString('mysql:host=', $message, 'the error must carry a copy-pasteable DSN example');
             $this->assertStringContainsString('storage.user', $message, 'the credential keys must be taught alongside the DSN');
         }
+    }
+
+    /**
+     * AN EXAMPLE IS NOT THE EXAM (greenhouse decisions/0594 §5, question 7). A teaching error is read by
+     * whoever configures storage, whatever they are building. Where its example has to name the thing being
+     * stored into, it names nothing of its own: a placeholder for what is the caller's to name, or the app.
+     */
+    public function testTheExampleOfAValueNamesNothingOfItsOwn(): void
+    {
+        $named = [];
+        foreach (['file' => '~/([^/\']+)\.json\'~', 'sqlite' => '~/([^/\']+)\.db\'~', 'mysql' => '~dbname=([^;\']+)~'] as $driver => $name) {
+            try {
+                RepositoryFactory::fromConfig(['driver' => $driver], TestEntity::class);
+                $this->fail("the '{$driver}' driver without its key must throw the teaching InvalidArgumentException");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertSame(1, preg_match('/\be\.g\. (.+)$/s', $e->getMessage(), $example), "the '{$driver}' error shows an example");
+                $this->assertSame(1, preg_match($name, $example[1], $found), "the '{$driver}' example names what it stores into");
+                $this->assertTrue(
+                    preg_match('/^<[a-z]+>$/', $found[1]) === 1 || $found[1] === 'app',
+                    "the '{$driver}' example names «{$found[1]}»: it shows a placeholder for what is the caller's to name, or the app",
+                );
+                $named[$driver] = $found[1];
+            }
+        }
+
+        $this->assertSame(['file' => '<collection>', 'sqlite' => 'app', 'mysql' => 'app'], $named, 'the control: all three examples were read');
     }
 
     /** An empty-string value is as absent as a missing key — '' opens nothing. */
