@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/getmilpa/data/compare/v0.3.2...v0.3.3) (2026-10-07)
+
+
+### Bug Fixes
+
+* the example of a storage path shows a placeholder where the name is the caller's ([#16](https://github.com/getmilpa/data/issues/16)) ([6ded74c](https://github.com/getmilpa/data/commit/6ded74cb71a174d5b267937f62ad7678d98313e2))
+
 ## [0.3.2](https://github.com/getmilpa/data/compare/v0.3.1...v0.3.2) (2026-09-10)
 
 
